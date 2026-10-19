@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{Result, eyre::eyre};
 use serde::Deserialize;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -186,11 +186,7 @@ impl GitHubClient {
     }
 
     /// Get the date of the last commit
-    async fn get_last_commit(
-        &mut self,
-        owner: &str,
-        repo: &str,
-    ) -> Result<Option<DateTime<Utc>>> {
+    async fn get_last_commit(&mut self, owner: &str, repo: &str) -> Result<Option<DateTime<Utc>>> {
         self.check_rate_limit().await?;
 
         let url = format!(
@@ -286,9 +282,9 @@ impl GitHubClient {
 
     /// Get time until rate limit resets
     pub fn rate_limit_reset_in(&self) -> Option<i64> {
-        self.rate_limit.as_ref().map(|limit| {
-            (limit.reset_at - Utc::now()).num_seconds().max(0)
-        })
+        self.rate_limit
+            .as_ref()
+            .map(|limit| (limit.reset_at - Utc::now()).num_seconds().max(0))
     }
 
     /// Fetch metadata for a project, returning None if it fails (e.g., repo doesn't exist)

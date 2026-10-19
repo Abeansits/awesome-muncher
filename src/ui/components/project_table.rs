@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Rect},
     style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Row, Table, TableState},
-    Frame,
 };
 
 use crate::models::{Project, ProjectStatus};
@@ -101,11 +101,7 @@ impl ProjectTable {
                 SortColumn::Category => a.category.to_lowercase().cmp(&b.category.to_lowercase()),
             };
 
-            if asc {
-                cmp.reverse()
-            } else {
-                cmp
-            }
+            if asc { cmp.reverse() } else { cmp }
         });
     }
 
@@ -189,11 +185,7 @@ impl ProjectTable {
         .map(|(name, col, _)| {
             let is_sorted = self.sort_column == *col;
             let arrow = if is_sorted {
-                if self.sort_ascending {
-                    "↑"
-                } else {
-                    "↓"
-                }
+                if self.sort_ascending { "↑" } else { "↓" }
             } else {
                 ""
             };
