@@ -2,6 +2,7 @@
 name = "awesome-muncher"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
 description = "A TUI for exploring awesome lists and discovering active vs abandoned projects"
 authors = ["Sebastian Nystorm"]
 license = "MIT"

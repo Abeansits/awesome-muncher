@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use color_eyre::Result;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::models::source::SourceType;
 use crate::models::{Project, ProjectStatus, Source};

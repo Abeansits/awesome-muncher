@@ -1,0 +1,6 @@
+[advisories]
+ignore = [
+    # paste is unmaintained (RUSTSEC-2024-0436) via ratatui 0.29.
+    # Pending the ratatui 0.30 upgrade.
+    "RUSTSEC-2024-0436",
+]

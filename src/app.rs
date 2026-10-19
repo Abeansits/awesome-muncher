@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 
 use crate::config::Config;
 use crate::db::Database;
-use crate::fetch::{parse_awesome_list, GitHubClient};
+use crate::fetch::{GitHubClient, parse_awesome_list};
 use crate::models::{Project, Source};
 use crate::ui::components::status_bar::{random_fetch_message, random_sync_message};
 use crate::ui::screens::MainScreen;
@@ -14,7 +14,10 @@ use crate::ui::screens::MainScreen;
 #[derive(Debug)]
 pub enum AppMessage {
     /// Source markdown fetched and parsed
-    SourceParsed { projects: Vec<Project>, source_id: i64 },
+    SourceParsed {
+        projects: Vec<Project>,
+        source_id: i64,
+    },
     /// GitHub metadata fetched for a project
     ProjectMetadataFetched {
         project_id: i64,
@@ -48,11 +51,16 @@ pub struct App {
 
 // Konami code: Up Up Down Down Left Right Left Right B A
 const KONAMI_CODE: &[KeyCode] = &[
-    KeyCode::Up, KeyCode::Up,
-    KeyCode::Down, KeyCode::Down,
-    KeyCode::Left, KeyCode::Right,
-    KeyCode::Left, KeyCode::Right,
-    KeyCode::Char('b'), KeyCode::Char('a'),
+    KeyCode::Up,
+    KeyCode::Up,
+    KeyCode::Down,
+    KeyCode::Down,
+    KeyCode::Left,
+    KeyCode::Right,
+    KeyCode::Left,
+    KeyCode::Right,
+    KeyCode::Char('b'),
+    KeyCode::Char('a'),
 ];
 
 impl App {
@@ -98,10 +106,9 @@ impl App {
         let total = self.db.get_project_count()?;
         let fetched = self.db.get_fetched_count()?;
         if total > 0 && fetched < total {
-            self.screen.status_bar.set_message(format!(
-                "Metadata: {}/{} projects fetched",
-                fetched, total
-            ));
+            self.screen
+                .status_bar
+                .set_message(format!("Metadata: {}/{} projects fetched", fetched, total));
         } else if total > 0 {
             self.screen.status_bar.set_message("All projects synced");
         }
@@ -241,7 +248,9 @@ impl App {
 
         if self.konami_buffer == KONAMI_CODE {
             // Easter egg activated!
-            self.screen.status_bar.set_message("🎮 KONAMI CODE ACTIVATED! You found the secret! 🎮");
+            self.screen
+                .status_bar
+                .set_message("🎮 KONAMI CODE ACTIVATED! You found the secret! 🎮");
             self.konami_buffer.clear();
         }
     }
@@ -272,18 +281,25 @@ impl App {
         // Spawn background task for fetching source
         tokio::spawn(async move {
             match fetch_source_content(&source_url).await {
-                Ok(content) => {
-                    match parse_awesome_list(&content, source_id) {
-                        Ok(projects) => {
-                            let _ = tx.send(AppMessage::SourceParsed { projects, source_id }).await;
-                        }
-                        Err(e) => {
-                            let _ = tx.send(AppMessage::Error(format!("Parse error: {}", e))).await;
-                        }
+                Ok(content) => match parse_awesome_list(&content, source_id) {
+                    Ok(projects) => {
+                        let _ = tx
+                            .send(AppMessage::SourceParsed {
+                                projects,
+                                source_id,
+                            })
+                            .await;
                     }
-                }
+                    Err(e) => {
+                        let _ = tx
+                            .send(AppMessage::Error(format!("Parse error: {}", e)))
+                            .await;
+                    }
+                },
                 Err(e) => {
-                    let _ = tx.send(AppMessage::Error(format!("Fetch error: {}", e))).await;
+                    let _ = tx
+                        .send(AppMessage::Error(format!("Fetch error: {}", e)))
+                        .await;
                 }
             }
         });
@@ -305,31 +321,45 @@ impl App {
         tokio::spawn(async move {
             let mut client = GitHubClient::new(token);
             let mut fetched_count = 0;
-            
-            for (i, project) in projects.into_iter().enumerate() {
-                let _ = tx.send(AppMessage::SyncProgress { current: i + 1, total }).await;
 
-                if let (Some(owner), Some(repo)) = (project.github_owner.as_ref(), project.github_repo.as_ref()) {
-                    let (metadata, was_rate_limited) = client.fetch_project_metadata(owner, repo).await;
-                    
+            for (i, project) in projects.into_iter().enumerate() {
+                let _ = tx
+                    .send(AppMessage::SyncProgress {
+                        current: i + 1,
+                        total,
+                    })
+                    .await;
+
+                if let (Some(owner), Some(repo)) =
+                    (project.github_owner.as_ref(), project.github_repo.as_ref())
+                {
+                    let (metadata, was_rate_limited) =
+                        client.fetch_project_metadata(owner, repo).await;
+
                     if was_rate_limited {
                         // Stop and notify about rate limit
                         let reset_in = client.rate_limit_reset_in().unwrap_or(3600);
-                        let _ = tx.send(AppMessage::RateLimited { reset_in_seconds: reset_in }).await;
+                        let _ = tx
+                            .send(AppMessage::RateLimited {
+                                reset_in_seconds: reset_in,
+                            })
+                            .await;
                         break;
                     }
-                    
+
                     if let Some(metadata) = metadata {
                         fetched_count += 1;
-                        let _ = tx.send(AppMessage::ProjectMetadataFetched {
-                            project_id: project.id.unwrap_or(0),
-                            stars: metadata.stars,
-                            open_issues: metadata.open_issues,
-                            open_prs: metadata.open_prs,
-                            contributors: metadata.contributors,
-                            last_commit: metadata.last_commit,
-                            is_archived: metadata.is_archived,
-                        }).await;
+                        let _ = tx
+                            .send(AppMessage::ProjectMetadataFetched {
+                                project_id: project.id.unwrap_or(0),
+                                stars: metadata.stars,
+                                open_issues: metadata.open_issues,
+                                open_prs: metadata.open_prs,
+                                contributors: metadata.contributors,
+                                last_commit: metadata.last_commit,
+                                is_archived: metadata.is_archived,
+                            })
+                            .await;
                     }
                 }
 
@@ -349,13 +379,18 @@ impl App {
     pub fn process_messages(&mut self) -> Result<()> {
         while let Ok(msg) = self.message_rx.try_recv() {
             match msg {
-                AppMessage::SourceParsed { projects, source_id } => {
+                AppMessage::SourceParsed {
+                    projects,
+                    source_id,
+                } => {
                     let count = self.db.bulk_insert_projects(&projects)?;
                     self.db.mark_source_synced(source_id)?;
-                    self.screen.status_bar.set_message(format!("Parsed {} projects", count));
+                    self.screen
+                        .status_bar
+                        .set_message(format!("Parsed {} projects", count));
                     self.screen.hide_loading();
                     self.refresh_data()?;
-                    
+
                     // Start fetching GitHub metadata
                     let msg = random_fetch_message();
                     self.screen.show_loading(msg);
@@ -385,7 +420,7 @@ impl App {
                     self.screen.set_loading_progress(current, total);
                     self.screen.status_bar.set_progress(current, total);
                     self.screen.status_bar.set_message(random_fetch_message());
-                    
+
                     // Refresh data periodically during sync
                     if current % 20 == 0 {
                         self.refresh_data()?;
@@ -409,7 +444,9 @@ impl App {
                 }
                 AppMessage::Error(err) => {
                     self.screen.hide_loading();
-                    self.screen.status_bar.set_message(format!("Error: {}", err));
+                    self.screen
+                        .status_bar
+                        .set_message(format!("Error: {}", err));
                 }
             }
         }
